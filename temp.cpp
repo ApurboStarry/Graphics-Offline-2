@@ -19,7 +19,7 @@ Point eye;
 Point look;
 Point up;
 
-double fov;
+double fovY;
 double aspectRatio;
 double near;
 double far;
@@ -41,7 +41,7 @@ void inputInitials() {
   cin >> eye.x >> eye.y >> eye.z;
   cin >> look.x >> look.y >> look.z;
   cin >> up.x >> up.y >> up.z;
-  cin >> fov >> aspectRatio >> near >> far;
+  cin >> fovY >> aspectRatio >> near >> far;
 }
 
 vector<vector<double>> get4By1MatrixFromPoint(Point p) {
@@ -340,7 +340,11 @@ void applyViewTransformation(vector<vector<double>> v) {
   for(int i = 0; i < trianglePoints.size(); i++) {
     vector<vector<double>> newMatrix = multiplyMatrices(v, get4By1MatrixFromPoint(trianglePoints[i]));
 
-    cout << fixed << setprecision(7) << newMatrix[0][0] << " " << newMatrix[1][0] << " " << newMatrix[2][0] << endl;
+    trianglePoints[i].x = newMatrix[0][0];
+    trianglePoints[i].y = newMatrix[1][0];
+    trianglePoints[i].z = newMatrix[2][0];
+
+    cout << fixed << setprecision(7) << trianglePoints[i].x << " " << trianglePoints[i].y << " " << trianglePoints[i].z << endl;
     if((i+1) % 3 == 0) cout << endl;
   }
 }
@@ -350,8 +354,40 @@ void stage2() {
   applyViewTransformation(viewTransformationMatrix);
 }
 
-void stage3() {
+vector<vector<double>> getProjectionTransformationMatrix() {
+  double fovX = fovY * aspectRatio;
+  double t = near * tan((fovY / 2) * PI / 180);
+  double r = near * tan((fovX / 2) * PI / 180);
 
+  vector<vector<double>> mat(4, vector<double>(4, 0));
+
+  mat[0][0] = near / r;
+  mat[1][1] = near / t;
+
+  mat[2][2] = -(far + near) / (far - near);
+  mat[2][3] = -(2 * far * near) / (far - near);
+
+  mat[3][2] = -1;
+
+  return mat;
+}
+
+void applyProjectionTransformation(vector<vector<double>> p) {
+  for(int i = 0; i < trianglePoints.size(); i++) {
+    vector<vector<double>> newMatrix = multiplyMatrices(p, get4By1MatrixFromPoint(trianglePoints[i]));
+
+    trianglePoints[i].x = newMatrix[0][0] / newMatrix[3][0];
+    trianglePoints[i].y = newMatrix[1][0] / newMatrix[3][0];
+    trianglePoints[i].z = newMatrix[2][0] / newMatrix[3][0];
+
+    cout << fixed << setprecision(7) << trianglePoints[i].x << " " << trianglePoints[i].y << " " << trianglePoints[i].z << endl;
+    if((i+1) % 3 == 0) cout << endl;
+  }
+}
+
+void stage3() {
+  vector<vector<double>> projectionTransformationMatrix = getProjectionTransformationMatrix();
+  applyProjectionTransformation(projectionTransformationMatrix);
 }
 
 void stage4() {
@@ -360,12 +396,15 @@ void stage4() {
 
 int main() {
   freopen("scene.txt", "r", stdin);
+
   freopen("stage1.txt", "w", stdout);
   stage1();
 
   freopen("stage2.txt", "w", stdout);
   stage2();
 
+  freopen("stage3.txt", "w", stdout);
   stage3();
+  
   stage4();
 }
