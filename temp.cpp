@@ -1,15 +1,19 @@
 #include <bits/stdc++.h>
 #include <iomanip>
 
+#define PI 2*acos(0.0)
+
 using namespace std;
 
-#define PI 2*acos(0.0)
+int numberOfTriangles = 0;
 
 struct Point {
   double x;
   double y;
   double z;
 };
+
+vector<Point> trianglePoints;
 
 Point eye;
 Point look;
@@ -31,6 +35,7 @@ vector<vector<double>> getIdentityMatrix4By4() {
 }
 
 stack<vector<vector<double>>> matrixStack;
+stack<int> stackTracker;
 
 void inputInitials() {
   cin >> eye.x >> eye.y >> eye.z;
@@ -76,7 +81,13 @@ void processTriangle() {
 
     vector<vector<double>> newMatrix = multiplyMatrices(matrixStack.top(), get4By1MatrixFromPoint(trianglePoint));
 
-    cout << fixed << setprecision(7) << newMatrix[0][0] << " " << newMatrix[1][0] << " " << newMatrix[2][0] << endl;
+    trianglePoint.x = newMatrix[0][0];
+    trianglePoint.y = newMatrix[1][0];
+    trianglePoint.z = newMatrix[2][0];
+
+    trianglePoints.push_back(trianglePoint);
+    
+    cout << fixed << setprecision(7) << trianglePoint.x << " " << trianglePoint.y << " " << trianglePoint.z << endl;
   }
   cout << endl;
 }
@@ -158,6 +169,7 @@ double dotProductOfPoints(Point a, Point b) {
 
 Point crossProductOfPoints(Point a, Point b) {
   Point c;
+
   c.x = a.y * b.z - a.z * b.y;
   c.y = a.z * b.x - a.x * b.z;
   c.z = a.x * b.y - a.y * b.x;
@@ -167,6 +179,7 @@ Point crossProductOfPoints(Point a, Point b) {
 
 Point rotate(Point x, Point a, double theta) {
   Point result;
+
   Point temp1 = scalerProductOfPoint(x, cos(theta));
   Point temp2 = scalerProductOfPoint(a, (1-cos(theta)) * dotProductOfPoints(a, x));
   Point temp3 = scalerProductOfPoint(crossProductOfPoints(a, x), sin(theta));
@@ -198,11 +211,23 @@ vector<vector<double>> getRotationMatrix(Point c1, Point c2, Point c3) {
   return mat;
 }
 
+Point normalize(Point p) {
+  double determinant = (p.x * p.x) + (p.y * p.y) + (p.z * p.z);
+  determinant = sqrt(determinant);
+
+  p.x /= determinant;
+  p.y /= determinant;
+  p.z /= determinant;
+
+  return p;
+}
+
 void performRotation() {
   double angle;
   Point a;
   cin >> angle >> a.x >> a.y >> a.z;
 
+  a = normalize(a);
   angle = PI * angle / 180;
 
   Point c1 = rotate(getUnitVectorOfX(), a, angle);
@@ -210,45 +235,43 @@ void performRotation() {
   Point c3 = rotate(getUnitVectorOfZ(), a, angle);
 
   vector<vector<double>> newMatrix = multiplyMatrices(matrixStack.top(), getRotationMatrix(c1, c2, c3));
-
-  matrixStack.pop();
   matrixStack.push(newMatrix);
 }
 
 void processCommands() {
   matrixStack.push(getIdentityMatrix4By4());
+  stackTracker.push(matrixStack.size());
+
   while(true) {
     string command;
     cin >> command;
 
     if(command == "triangle") {
+      numberOfTriangles++;
       processTriangle();
     } else if(command == "translate") {
       double tx, ty, tz;
       cin >> tx >> ty >> tz;
 
       vector<vector<double>> newMatrix = multiplyMatrices(matrixStack.top(), getTranslationMatrix(tx, ty, tz));
-      
-      matrixStack.pop();
       matrixStack.push(newMatrix);
     } else if(command == "scale") {
       double sx, sy, sz;
       cin >> sx >> sy >> sz;
 
       vector<vector<double>> newMatrix = multiplyMatrices(matrixStack.top(), getScalingMatrix(sx, sy, sz));
-
-      matrixStack.pop();
       matrixStack.push(newMatrix);
     } else if(command == "rotate") {
       performRotation();
     } else if(command == "push") {
-      vector<vector<double>> matrixToPush = matrixStack.top();
-      matrixStack.push(matrixToPush);
+      stackTracker.push(matrixStack.size());
     } else if(command == "pop") {
-      matrixStack.pop();
-      
-      vector<vector<double>> matrixToPush = matrixStack.top();
-      matrixStack.push(matrixToPush);
+      int desiredStackSize = stackTracker.top();
+      stackTracker.pop();
+
+      while(matrixStack.size() > desiredStackSize) {
+        matrixStack.pop();
+      }
     } else {
       break;
     }
@@ -256,18 +279,75 @@ void processCommands() {
 }
 
 void stage1() {
-  freopen("scene.txt", "r", stdin);
-  freopen("stage1.txt", "w", stdout);
-
   inputInitials();
   processCommands();
+}
 
-  fclose(stdin);
-  fclose(stdout);
+Point subtractPoints(Point a, Point b) {
+  Point c;
+
+  c.x = a.x - b.x;
+  c.y = a.y - b.y;
+  c.z = a.z - b.z;
+
+  return c;
+}
+
+vector<vector<double>> getR() {
+  Point l = subtractPoints(look, eye);
+  l = normalize(l);
+
+  Point r = crossProductOfPoints(l, up);
+  r = normalize(r);
+
+  Point u = crossProductOfPoints(r, l);
+
+  vector<vector<double>> mat(4, vector<double>(4, 0));
+
+  mat[0][0] = r.x;
+  mat[0][1] = r.y;
+  mat[0][2] = r.z;
+
+  mat[1][0] = u.x;
+  mat[1][1] = u.y;
+  mat[1][2] = u.z;
+
+  mat[2][0] = -l.x;
+  mat[2][1] = -l.y;
+  mat[2][2] = -l.z;
+
+  mat[3][3] = 1;
+
+  return mat;
+}
+
+vector<vector<double>> getT() {
+  vector<vector<double>> mat(4, vector<double>(4, 0));
+
+  mat[0][0] = 1;
+  mat[1][1] = 1;
+  mat[2][2] = 1;
+  mat[3][3] = 1;
+
+  mat[0][3] = -eye.x;
+  mat[1][3] = -eye.y;
+  mat[2][3] = -eye.z;
+
+  return mat;
+}
+
+void applyViewTransformation(vector<vector<double>> v) {
+  for(int i = 0; i < trianglePoints.size(); i++) {
+    vector<vector<double>> newMatrix = multiplyMatrices(v, get4By1MatrixFromPoint(trianglePoints[i]));
+
+    cout << fixed << setprecision(7) << newMatrix[0][0] << " " << newMatrix[1][0] << " " << newMatrix[2][0] << endl;
+    if((i+1) % 3 == 0) cout << endl;
+  }
 }
 
 void stage2() {
-
+  vector<vector<double>> viewTransformationMatrix = multiplyMatrices(getR(), getT());
+  applyViewTransformation(viewTransformationMatrix);
 }
 
 void stage3() {
@@ -279,8 +359,13 @@ void stage4() {
 }
 
 int main() {
+  freopen("scene.txt", "r", stdin);
+  freopen("stage1.txt", "w", stdout);
   stage1();
+
+  freopen("stage2.txt", "w", stdout);
   stage2();
+
   stage3();
   stage4();
 }
