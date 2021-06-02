@@ -81,9 +81,9 @@ void processTriangle() {
 
     vector<vector<double>> newMatrix = multiplyMatrices(matrixStack.top(), get4By1MatrixFromPoint(trianglePoint));
 
-    trianglePoint.x = newMatrix[0][0];
-    trianglePoint.y = newMatrix[1][0];
-    trianglePoint.z = newMatrix[2][0];
+    trianglePoint.x = newMatrix[0][0] / newMatrix[3][0];
+    trianglePoint.y = newMatrix[1][0] / newMatrix[3][0];
+    trianglePoint.z = newMatrix[2][0] / newMatrix[3][0];
 
     trianglePoints.push_back(trianglePoint);
     
@@ -340,9 +340,9 @@ void applyViewTransformation(vector<vector<double>> v) {
   for(int i = 0; i < trianglePoints.size(); i++) {
     vector<vector<double>> newMatrix = multiplyMatrices(v, get4By1MatrixFromPoint(trianglePoints[i]));
 
-    trianglePoints[i].x = newMatrix[0][0];
-    trianglePoints[i].y = newMatrix[1][0];
-    trianglePoints[i].z = newMatrix[2][0];
+    trianglePoints[i].x = newMatrix[0][0] / newMatrix[3][0];
+    trianglePoints[i].y = newMatrix[1][0] / newMatrix[3][0];
+    trianglePoints[i].z = newMatrix[2][0] / newMatrix[3][0];
 
     cout << fixed << setprecision(7) << trianglePoints[i].x << " " << trianglePoints[i].y << " " << trianglePoints[i].z << endl;
     if((i+1) % 3 == 0) cout << endl;
