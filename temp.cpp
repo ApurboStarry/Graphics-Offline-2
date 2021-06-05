@@ -24,6 +24,16 @@ double aspectRatio;
 double near;
 double far;
 
+double screenWidth, screenHeight;
+double leftLimitOfX, rightLimitOfX;
+double bottomLimitOfY, topLimitOfY;
+double front, rear;
+
+double dx, dy;
+
+vector<vector<double>> zBuffer;
+vector<vector<int>> frameBuffer;
+
 vector<vector<double>> getIdentityMatrix4By4() {
   vector<vector<double>> vec(4, vector<double> (4, 0));
   vec[0][0] = 1;
@@ -390,8 +400,182 @@ void stage3() {
   applyProjectionTransformation(projectionTransformationMatrix);
 }
 
-void stage4() {
+void getInputsOfStage4() {
+  ifstream file("config.txt");
 
+  double value;
+  vector<double> values;
+
+  while(file >> value) {
+    values.push_back(value);
+  }
+
+  screenWidth = values[0];
+  screenHeight = values[1];
+
+  leftLimitOfX = values[2];
+  rightLimitOfX = -leftLimitOfX;
+
+  bottomLimitOfY = values[3];
+  topLimitOfY = -bottomLimitOfY;
+
+  front = values[4];
+  rear = values[5];
+
+  dx = (rightLimitOfX - leftLimitOfX) / screenWidth;
+  dy = (topLimitOfY - bottomLimitOfY) / screenHeight;
+}
+
+void initializeTheBufferValues() {
+  zBuffer = vector<vector<double>>(screenHeight, vector<double>(screenWidth, rear));
+  frameBuffer = vector<vector<int>>(screenHeight, vector<int>(screenWidth, 0));
+}
+
+double getTopScanLine(Point a, Point b, Point c) {
+  double maxY = max(a.y, max(b.y, c.y));
+  return min(topLimitOfY, maxY);
+}
+
+double getBottomScanLine(Point a, Point b, Point c) {
+  double minY = min(a.y, min(b.y, c.y));
+  return max(bottomLimitOfY, minY);
+}
+
+void updateZBufferAndFrameBuffer(double row, double col, double zValue) {
+  cout << "zBuffer: " << zValue << endl;
+
+  int r = lround((leftLimitOfX - row) / dx);
+  int c = lround((topLimitOfY - col) / dy);
+  if(zBuffer[r][c] > zValue) {
+    zBuffer[r][c] = zValue;
+    // frameBuffer[r][c] = triga
+  }
+}
+
+void updateZBufferAndFrameBufferForExistingPoints(double xa, double xb, double za, double zb, double scanLine) {
+  for(int xp = xa + dx; xp < xb; xp += dx) {
+    int zp = za + (xp - xa) / (xb - xa) * (zb - za);
+    updateZBufferAndFrameBuffer(xp, scanLine, zp);
+  }
+}
+
+void process(Point leftIntersectingPoint, Point rightIntersectingPoint, double scanLine) {
+  updateZBufferAndFrameBuffer(leftIntersectingPoint.x, scanLine, leftIntersectingPoint.z);
+  updateZBufferAndFrameBuffer(rightIntersectingPoint.x, scanLine, rightIntersectingPoint.z);
+
+  double zA = leftIntersectingPoint.z;
+  double zB = rightIntersectingPoint.z;
+
+  updateZBufferAndFrameBufferForExistingPoints(leftIntersectingPoint.x, rightIntersectingPoint.x, zA, zB, scanLine);
+}
+
+double calculateZValue(Point commonPoint, Point a, double scanLine) {
+  return commonPoint.z + (scanLine - commonPoint.y) / (a.y - commonPoint.y) * (a.z - commonPoint.z);
+}
+
+void zValueForTheMostCommonCase(Point commonPoint, Point a, Point b, double scanLine, double leftIntersectingX, double rightIntersectingX) {
+  double zA = calculateZValue(commonPoint, a, scanLine);
+  double zB = calculateZValue(commonPoint, b, scanLine);
+
+  updateZBufferAndFrameBuffer(leftIntersectingX, scanLine, zA);
+  updateZBufferAndFrameBuffer(rightIntersectingX, scanLine, zB);
+
+  // updateZBufferAndFrameBuffer for the intermediate values
+  updateZBufferAndFrameBufferForExistingPoints(leftIntersectingX, rightIntersectingX, zA, zB, scanLine);
+}
+
+double getIntersectingPoint(Point a, Point b, double scanLine) {
+  return a.x + (b.x - a.x) / (b.y - a.y) * (scanLine - a.y);
+}
+
+void getIntersectingColumns(Point a, Point b, Point c, double scanLine) {
+  // the superimpose case
+  if(a.y == scanLine && b.y == scanLine) {
+    if(a.x <= b.x) {
+      return process(a, b, scanLine);
+    } else {
+      return process(b, a, scanLine);
+    }
+  } else if(b.y == scanLine && c.y == scanLine) {
+    if(b.x <= c.x) {
+      return process(b, c, scanLine);
+    } else {
+      return process(c, b, scanLine);
+    }
+  } else if(c.y == scanLine && a.y == scanLine) {
+    if(c.x <= a.x) {
+      return process(c, a, scanLine);
+    } else {
+      return process(a, c, scanLine);
+    }
+  }
+
+  // the single point intersection case
+  if(a.y == scanLine) {
+    return updateZBufferAndFrameBuffer(a.x, a.y, a.z);
+  } else if(b.y == scanLine) {
+    return updateZBufferAndFrameBuffer(b.x, b.y, b.z);
+  } else if(c.y == scanLine) {
+    return updateZBufferAndFrameBuffer(c.x, c.y, c.z);
+  }
+
+  vector<int> intersectingColumns;
+
+  int x = getIntersectingPoint(a, b, scanLine);
+  int y = getIntersectingPoint(b, c, scanLine);
+  int z = getIntersectingPoint(c, a, scanLine);
+
+  Point commonPoint;
+
+  if(x >= 0 && y >= 0) {
+    if(x <= y) {
+      zValueForTheMostCommonCase(b, a, c, scanLine, x, y);
+    } else {
+      zValueForTheMostCommonCase(b, c, a, scanLine, y, x);
+    }
+  } else if(y >= 0 && z >=0) {
+    if(y <= z) {
+      zValueForTheMostCommonCase(c, b, a, scanLine, y, z);
+    } else {
+      zValueForTheMostCommonCase(c, a, b, scanLine, z, y);
+    }
+  } else if(z >= 0 && x >= 0) {
+    if(z <= x) {
+      zValueForTheMostCommonCase(a, c, b, scanLine, z, x);
+    } else {
+      zValueForTheMostCommonCase(a, b, c, scanLine, x, z);
+    }
+  }
+}
+
+void applyAlgorithm() {
+  for(int triangle = 0; triangle < numberOfTriangles; triangle++) {
+    // trianglePoints[3*triangle], trianglePoints[3*triangle+1], trianglePoints[3*triangle+2]
+    double topScanLine = getTopScanLine(trianglePoints[3*triangle], trianglePoints[3*triangle+1], trianglePoints[3*triangle+2]);
+    double bottomScanLine = getBottomScanLine(trianglePoints[3*triangle], trianglePoints[3*triangle+1], trianglePoints[3*triangle+2]);
+
+    for(double scanLine = topScanLine; scanLine <= bottomScanLine; scanLine += dy) {
+      getIntersectingColumns(trianglePoints[3*triangle], trianglePoints[3*triangle+1], trianglePoints[3*triangle+2], scanLine);
+    }
+  }
+}
+
+void saveZBufferToFile() {
+  for(int i = 0; i < zBuffer.size(); i++) {
+    for(int j = 0; j < zBuffer[i].size(); j++) {
+      if(zBuffer[i][j] < rear) cout << zBuffer[i][j];
+      cout << " ";
+    }
+    cout << endl;
+  }
+}
+
+void stage4() {
+  getInputsOfStage4();
+  initializeTheBufferValues();
+  applyAlgorithm();
+  saveZBufferToFile();
+  // saveImage();
 }
 
 int main() {
@@ -405,6 +589,7 @@ int main() {
 
   freopen("stage3.txt", "w", stdout);
   stage3();
-  
+
+  freopen("z_buffer.txt", "w", stdout);
   stage4();
 }

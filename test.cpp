@@ -8,22 +8,9 @@ struct Point {
   double z;
 };
 
-Point normalize(Point p) {
-  double determinant = (p.x * p.x) + (p.y * p.y) + (p.z * p.z);
-  determinant = sqrt(determinant);
-
-  p.x /= determinant;
-  p.y /= determinant;
-  p.z /= determinant;
-
-  return p;
-}
-
 int main() {
-  Point l;
-  l.x = 0;
-  l.y = 0;
-  l.z = -50;
-
-  normalize(l);
+  cout << lround(3.5) << endl;
+  cout << lround(3.75) << endl;
+  cout << lround(3) << endl;
+  cout << lround(3.49999) << endl;
 }
